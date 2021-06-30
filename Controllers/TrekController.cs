@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using MySqlConnector;
-using Newtonsoft.Json;
+using TravelTracker.Models;
+//using MySqlConnector;
 
 namespace TravelTracker.Controllers
 {
@@ -18,61 +16,76 @@ namespace TravelTracker.Controllers
     {
         private readonly ILogger<TrekController> logger;
 
-        private readonly MySqlConnection mySqlConnection;
+        //private readonly MySqlConnection mySqlConnection;
 
-        public TrekController(ILogger<TrekController> logger, IServiceProvider provider, MySqlConnection mySqlConnection)
+        public TrekController(ILogger<TrekController> logger, IServiceProvider provider)
         {
             this.logger = logger;
-            this.mySqlConnection = mySqlConnection;
+            //this.mySqlConnection = mySqlConnection;
         }
 
         [HttpGet]
-        public IEnumerable<Trek> Get()
+        public IEnumerable<TrekRequestModel> Get()
         {
-            List<Trek> treks = new List<Trek>();
-            mySqlConnection.Open();
-
-            string query = @"SELECT * FROM treks;";
-
-            var command = new MySqlCommand(query, mySqlConnection);
-
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            List<TrekRequestModel> treks = new List<TrekRequestModel>();
+            using (var context = new TrekContext())
             {
-                var trek_date = (long)reader.GetValue("trek_date");
-                var area = (string)reader.GetValue("area");
-                var duration = (int)reader.GetValue("duration");
-                var weather = (string)reader.GetValue("weather");
-                var summary = (string)reader.GetValue("summary");
-
-                Trek trek = new Trek
+                foreach(var trek in context.Treks.Include(p => p.Owner))
                 {
-                    Area = area,
-                    TrekDate = DateTimeOffset.FromUnixTimeMilliseconds(trek_date).LocalDateTime,
-                    Duration = duration,
-                    Summary = summary,
-                    Weather = (Weather)Enum.Parse(typeof(Weather),weather)
-                };
-                treks.Add(trek);
+                    treks.Add(
+                        new TrekRequestModel
+                        {
+                            OwnerId = trek.Owner.Id.ToString(),
+                            Area = trek.Area,
+                            StartTime = DateTimeOffset.FromUnixTimeMilliseconds(trek.StartTime).LocalDateTime,
+                            FinishTime = DateTimeOffset.FromUnixTimeMilliseconds(trek.FinishTime).LocalDateTime,
+                            StartPoint = new TrekRequestModel.Coordinate
+                            {
+                                Lattitude = trek.StartPointLatitude,
+                                Longitude  = trek.StartPointLongitude
+                            },
+                            FinishPoint = new TrekRequestModel.Coordinate
+                            {
+                                Lattitude = trek.FinishPointLatitude,
+                                Longitude =  trek.FinishPointLongitude
+                            },
+                            Weather = trek.Weather,
+                            Summary = trek.Summary,
+                        }
+                    );
+                }
             }
-
-            mySqlConnection.Close();
-
             return treks;
         }
 
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<Trek> Post(Trek trek)
+        public ActionResult<Guid> Post(TrekRequestModel trekRequest)
         {
-            mySqlConnection.Open();
-            var tdate = new DateTimeOffset(trek.TrekDate).ToUnixTimeMilliseconds();
-            string query = $"INSERT INTO treks VALUES({tdate}, '{trek.Area}', {trek.Duration}, '{trek.Weather}', '{trek.Summary}');";
 
-            var command = new MySqlCommand(query, mySqlConnection);
-            command.ExecuteNonQuery();
-            return trek;
+            Trek trek = new Trek();
+            using (var context = new TrekContext())
+            {
+                trek = new Trek
+                {
+                    Id = Guid.NewGuid(),
+                    StartTime = new DateTimeOffset(trekRequest.StartTime).ToUnixTimeMilliseconds(),
+                    FinishTime = new DateTimeOffset(trekRequest.FinishTime).ToUnixTimeMilliseconds(),
+                    Area = trekRequest.Area,
+                    StartPointLatitude = trekRequest.StartPoint.Lattitude,
+                    StartPointLongitude = trekRequest.StartPoint.Longitude,
+                    FinishPointLatitude = trekRequest.FinishPoint.Lattitude,
+                    FinishPointLongitude = trekRequest.FinishPoint.Longitude,
+                    Weather = trekRequest.Weather,
+                    Summary = trekRequest.Summary
+                };
+                trek.Owner = context.Owners.Find(Guid.Parse(trekRequest.OwnerId));
+                context.Treks.Add(trek);
+                var result = context.SaveChanges();
+            }
+
+            return trek.Id;
         }
     }
 }
