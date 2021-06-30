@@ -23,6 +23,7 @@ namespace TravelTracker
 
     public class Trek
     {
+        [JsonPropertyName("trekDate")]
         public DateTime TrekDate { get; set; }
 
         [JsonPropertyName("area")]

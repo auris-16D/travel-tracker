@@ -39,7 +39,7 @@ namespace TravelTracker.Controllers
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                var trek_date = (DateTime)reader.GetValue("trek_date");
+                var trek_date = (long)reader.GetValue("trek_date");
                 var area = (string)reader.GetValue("area");
                 var duration = (int)reader.GetValue("duration");
                 var weather = (string)reader.GetValue("weather");
@@ -48,7 +48,7 @@ namespace TravelTracker.Controllers
                 Trek trek = new Trek
                 {
                     Area = area,
-                    TrekDate = trek_date,
+                    TrekDate = DateTimeOffset.FromUnixTimeMilliseconds(trek_date).LocalDateTime,
                     Duration = duration,
                     Summary = summary,
                     Weather = (Weather)Enum.Parse(typeof(Weather),weather)
@@ -67,8 +67,8 @@ namespace TravelTracker.Controllers
         public ActionResult<Trek> Post(Trek trek)
         {
             mySqlConnection.Open();
-
-            string query = $"INSERT INTO treks VALUES('{trek.TrekDate}', '{trek.Area}', {trek.Duration}, '{trek.Weather}', '{trek.Summary}');";
+            var tdate = new DateTimeOffset(trek.TrekDate).ToUnixTimeMilliseconds();
+            string query = $"INSERT INTO treks VALUES({tdate}, '{trek.Area}', {trek.Duration}, '{trek.Weather}', '{trek.Summary}');";
 
             var command = new MySqlCommand(query, mySqlConnection);
             command.ExecuteNonQuery();
