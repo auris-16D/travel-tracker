@@ -69,7 +69,7 @@ namespace TravelTracker.Controllers
             {
                 trek = new Trek
                 {
-                    Id = Guid.Parse(trekRequest.OwnerId),
+                    Id = Guid.NewGuid(),
                     StartTime = new DateTimeOffset(trekRequest.StartTime).ToUnixTimeMilliseconds(),
                     FinishTime = new DateTimeOffset(trekRequest.FinishTime).ToUnixTimeMilliseconds(),
                     Area = trekRequest.Area,
